@@ -104,7 +104,7 @@ async def handle_batch_commands(client: Client, message: Message):
             await message.reply_text(f"❌ Error saving batch: {str(e)}")
             return
 
-@Client.on_message(filters.media & ~filters.command)
+@Client.on_message(filters.media & filters.private)
 async def handle_batch_file(client: Client, message: Message):
     """Handle incoming files during batch upload"""
     user_id = message.from_user.id
@@ -131,7 +131,7 @@ async def handle_batch_file(client: Client, message: Message):
         # Store file info in session
         session.files.append(file_data)
         
-        # Send acknowledgment
+        # Send acknowledgment with ordinal number
         ordinal_suffix = lambda n: str(n) + ("th" if 4 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
         await message.reply_text(
             f"✅ {ordinal_suffix(session.file_count)} file uploaded.\n"
