@@ -3,8 +3,12 @@ import math
 from typing import Union
 from pyrogram.types import Message
 from PIL import Image
-import io
 
+from .button_manager import ButtonManager
+from .progress import progress_callback, humanbytes, TimeFormatter
+from .admin_check import is_admin
+
+# Utility Functions
 def format_bytes(size: Union[int, float]) -> str:
     if not size:
         return "0B"
@@ -98,7 +102,6 @@ def get_file_size(message: Message) -> int:
         elif message.audio:
             return message.audio.file_size
         elif message.photo:
-            # For photos, get the size of the largest photo size
             return max([p.file_size for p in message.photo.sizes])
         elif message.voice:
             return message.voice.file_size
@@ -115,12 +118,10 @@ def clean_filename(filename: str) -> str:
     if not filename:
         return "file"
         
-    # Remove invalid characters
     invalid_chars = '<>:"/\\|?*'
     for char in invalid_chars:
         filename = filename.replace(char, '')
     
-    # Limit filename length
     filename = filename.strip()
     if len(filename) > 60:
         name, ext = os.path.splitext(filename)
@@ -185,7 +186,24 @@ class ButtonManager:
                 InlineKeyboardButton("About", callback_data="about")
             ],
             [
-                InlineKeyboardButton("Channel", url="https://t.me/Noobscrubs"),
-                InlineKeyboardButton("Support", url="https://t.me/AlphaReports")
+                InlineKeyboardButton("Channel", url="https://t.me/thealphabotz"),
+                InlineKeyboardButton("Support", url="https://t.me/Alphabotzchat")
             ]
         ])
+
+# Expose functions for external imports
+__all__ = [
+    'ButtonManager',
+    'progress_callback',
+    'humanbytes',
+    'TimeFormatter',
+    'is_admin',
+    'format_bytes',
+    'get_file_type',
+    'generate_thumbnail',
+    'get_file_name',
+    'get_file_size',
+    'clean_filename',
+    'get_media_info',
+    'process_media'
+    ]
