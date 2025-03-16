@@ -54,7 +54,7 @@ async def start_command(client: Client, message: Message):
             try:
                 if not await button_manager.check_force_sub(client, message.from_user.id):
                     await message.reply_text(
-                        "**⚠️ You must join our channel to use this bot!**\n\n"
+                        "⚠️ You must join our channel to use this bot!\n\n"
                         "Please join Our Forcesub Channel and try again.",
                         reply_markup=button_manager.force_sub_button()
                     )
@@ -74,19 +74,30 @@ async def start_command(client: Client, message: Message):
                     await message.reply_text("❌ Batch not found or has been deleted!")
                     return
                 
-                # Send batch info message
+                # Send batch info message without parse mode
                 info_msg = await message.reply_text(
-                    f"📦 **Batch Download Started**\n\n"
-                    f"• Total Files: `{batch_data['total_files']}`\n"
+                    f"📦 Batch Download Started\n\n"
+                    f"• Total Files: {batch_data['total_files']}\n"
                     f"• Description: {batch_data.get('description', 'Not provided')}\n\n"
-                    f"⬇️ Downloading files...",
-                    parse_mode="Markdown"
+                    f"⬇️ Downloading files..."
                 )
                 
                 # Send all files in batch
                 success_count = 0
-                for index, file_data in enumerate(batch_data['files']):
+                failed_count = 0
+                
+                for index, file_data in enumerate(batch_data['files'], 1):
                     try:
+                        # Add progress indicator
+                        if index % 5 == 0:
+                            await info_msg.edit_text(
+                                f"📦 Batch Download in Progress\n\n"
+                                f"• Processing: {index}/{batch_data['total_files']} files\n"
+                                f"• Successful: {success_count}\n"
+                                f"• Failed: {failed_count}\n\n"
+                                f"⏳ Please wait..."
+                            )
+                        
                         msg = await client.copy_message(
                             chat_id=message.chat.id,
                             from_chat_id=config.DB_CHANNEL_ID,
@@ -95,23 +106,24 @@ async def start_command(client: Client, message: Message):
                         
                         success_count += 1
                         
-                        # Log progress periodically
-                        if success_count % 5 == 0 or success_count == batch_data['total_files']:
-                            logger.info(f"Batch download progress: {success_count}/{batch_data['total_files']}")
-                        
                         # Handle auto-delete if enabled
                         if file_data.get("auto_delete"):
                             delete_time = file_data.get("auto_delete_time")
                             if delete_time:
                                 asyncio.create_task(schedule_message_deletion(
-                                    client, file_data.get("uuid", f"batch_{batch_id}_{index}"), 
-                                    message.chat.id, [msg.id], delete_time
+                                    client, 
+                                    file_data.get("uuid", f"batch_{batch_id}_{index}"), 
+                                    message.chat.id, 
+                                    [msg.id], 
+                                    delete_time
                                 ))
                         
                         # Add a small delay to prevent flood
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(1.5)  # Increased delay to prevent rate limiting
+                        
                     except Exception as e:
-                        logger.error(f"Error sending batch file: {str(e)}")
+                        logger.error(f"Error sending batch file {index}: {str(e)}")
+                        failed_count += 1
                         continue
                 
                 # Update batch download counter
@@ -120,14 +132,22 @@ async def start_command(client: Client, message: Message):
                 except Exception as e:
                     logger.error(f"Failed to increment batch downloads: {e}")
                 
-                # Send completion message
-                await info_msg.edit_text(
-                    f"✅ **Batch Download Completed**\n\n"
-                    f"• Successfully sent: {success_count}/{batch_data['total_files']} files\n"
+                # Send completion message without parse mode
+                completion_text = (
+                    f"✅ Batch Download Completed\n\n"
+                    f"• Total Files: {batch_data['total_files']}\n"
+                    f"• Successfully Sent: {success_count}\n"
+                    f"• Failed: {failed_count}\n"
                     f"• Description: {batch_data.get('description', 'Not provided')}\n\n"
-                    f"💡 **Note:** Save important files to your saved messages!",
-                    parse_mode="markdown"
                 )
+                
+                if failed_count > 0:
+                    completion_text += "⚠️ Some files failed to send. Please try again later.\n\n"
+                
+                completion_text += "💡 Note: Save important files to your saved messages!"
+                
+                await info_msg.edit_text(completion_text)
+                
             except Exception as e:
                 logger.error(f"Batch download failed: {e}")
                 await message.reply_text(f"❌ Error processing batch: {str(e)}")
@@ -145,6 +165,7 @@ async def start_command(client: Client, message: Message):
                 from_chat_id=config.DB_CHANNEL_ID,
                 message_id=file_data["message_id"]
             )
+            
             await db.increment_downloads(command_arg)
             await db.update_file_message_id(command_arg, msg.id, message.chat.id)
             
@@ -152,16 +173,17 @@ async def start_command(client: Client, message: Message):
                 delete_time = file_data.get("auto_delete_time")
                 if delete_time:
                     info_msg = await msg.reply_text(
-                        f"⏳ **File Auto-Delete Information**\n\n"
+                        f"⏳ File Auto-Delete Information\n\n"
                         f"This file will be automatically deleted in {delete_time} minutes\n"
                         f"• Delete Time: {delete_time} minutes\n"
-                        f"• Time Left: {delete_time} minutes\n"
-                        f"💡 **Save this file to your saved messages before it's deleted!**"
+                        f"• Time Left: {delete_time} minutes\n\n"
+                        f"💡 Save this file to your saved messages before it's deleted!"
                     )
                     
                     asyncio.create_task(schedule_message_deletion(
                         client, command_arg, message.chat.id, [msg.id, info_msg.id], delete_time
                     ))
+                    
         except Exception as e:
             logger.error(f"Single file download failed: {e}")
             await message.reply_text(f"❌ Error: {str(e)}")
@@ -182,4 +204,4 @@ async def start_command(client: Client, message: Message):
         await message.reply_text(
             f"👋 Welcome to the bot, {message.from_user.mention}!\n\n"
             f"Use this bot to store and share your files."
-        )
+            )
