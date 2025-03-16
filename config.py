@@ -33,6 +33,9 @@ PING_MODE = bool(os.getenv("PING_MODE", True))
 PING_URL = os.getenv("URL")
 PING_TIME = int(os.getenv("PING_TIME"))
 
+
+DEFAULT_PARSE_MODE = "Markdown"  # or "HTML" if you prefer HTML formatting
+
 # Batch Upload Configuration
 MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "100"))  # Maximum files in a batch
 BATCH_AUTO_DELETE = bool(os.getenv("BATCH_AUTO_DELETE", "True"))  # Auto-delete batch messages
