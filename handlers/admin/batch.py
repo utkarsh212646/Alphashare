@@ -36,14 +36,14 @@ async def start_batch(client: Client, message: Message):
     
     # Send instructions
     await message.reply_text(
-        "📦 **Batch Upload Mode Started!**\n\n"
+        "📦 <b>Batch Upload Mode Started!</b>\n\n"
         "• Send me files one by one\n"
         "• Use /adddesc to add a description to this batch\n"
         "• Use /done when you finish uploading\n"
         "• Use /cancel_batch to cancel this session\n\n"
-        "**Current Status:**\n"
+        "<b>Current Status:</b>\n"
         "Files received: 0",
-        parse_mode="md"
+        parse_mode="html"
     )
 
 @Client.on_message(filters.command("adddesc") & filters.user(ADMIN_IDS))
@@ -64,9 +64,9 @@ async def add_batch_description(client: Client, message: Message):
     batch_sessions[user_id].description = description
     
     await message.reply_text(
-        "✅ **Batch description added successfully!**\n\n"
+        "✅ <b>Batch description added successfully!</b>\n\n"
         f"Description: {description}",
-        parse_mode="md"
+        parse_mode="html"
     )
 
 @Client.on_message(filters.command("done") & filters.user(ADMIN_IDS))
@@ -117,14 +117,14 @@ async def finish_batch(client: Client, message: Message):
     ])
     
     await message.reply_text(
-        f"✅ **Batch Upload Completed!**\n\n"
-        f"• Total Files: `{len(session.files)}`\n"
-        f"• Batch ID: `{session.batch_id}`\n"
-        f"• Time Taken: `{duration.seconds}s`\n"
+        f"✅ <b>Batch Upload Completed!</b>\n\n"
+        f"• Total Files: <code>{len(session.files)}</code>\n"
+        f"• Batch ID: <code>{session.batch_id}</code>\n"
+        f"• Time Taken: <code>{duration.seconds}s</code>\n"
         f"• Description: {session.description or 'Not provided'}\n\n"
         f"Share this link to access all files:",
         reply_markup=keyboard,
-        parse_mode="md"
+        parse_mode="html"
     )
     
     # Clear session
@@ -182,9 +182,9 @@ async def handle_batch_file(client: Client, message: Message):
         
         # Update status message
         status_text = (
-            f"📦 **Batch Upload in Progress**\n\n"
-            f"• Files Received: `{len(session.files)}`\n"
-            f"• Last File: `{file_data['file_name']}`\n"
+            f"📦 <b>Batch Upload in Progress</b>\n\n"
+            f"• Files Received: <code>{len(session.files)}</code>\n"
+            f"• Last File: <code>{file_data['file_name']}</code>\n"
             f"• Description: {session.description or 'Not set'}\n\n"
             f"Send more files or use:\n"
             f"• /done - Complete batch\n"
@@ -194,14 +194,14 @@ async def handle_batch_file(client: Client, message: Message):
         
         try:
             if session.status_message:
-                await session.status_message.edit_text(status_text, parse_mode="md")
+                await session.status_message.edit_text(status_text, parse_mode="html")
             else:
-                session.status_message = await message.reply_text(status_text, parse_mode="md")
+                session.status_message = await message.reply_text(status_text, parse_mode="html")
         except Exception as e:
             print(f"Error updating status: {str(e)}")
             
     except Exception as e:
         await message.reply_text(f"❌ Error processing file: {str(e)}")
 
-# Last updated: 2025-03-16 06:34:01
-# Updated by: @thealphabotz
+# Last updated: 2025-03-16 06:38:41
+# Updated by: utkarsh212646
