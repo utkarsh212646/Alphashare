@@ -10,7 +10,7 @@ class Database:
         self.db = self.client[config.DATABASE_NAME]
         self.files = self.db.files
         self.users = self.db.users
-        self.batches = self.db.batches  # New collection for batches
+        self.batches = self.db.batches  # Collection for batches
         print("Database Connected Successfully!")
 
     async def add_file(self, file_data: Dict[str, Any]) -> str:
@@ -26,7 +26,8 @@ class Database:
             "auto_delete": file_data.get("auto_delete", False),
             "auto_delete_time": file_data.get("auto_delete_time", None),
             "uploaded_at": datetime.utcnow(),
-            "batch_id": file_data.get("batch_id", None)  # New field for batch association
+            "batch_id": file_data.get("batch_id", None),  # For batch association
+            "active_messages": []  # Track message instances across chats
         }
         await self.files.insert_one(file_doc)
         return file_doc["uuid"]
@@ -52,7 +53,9 @@ class Database:
             "created_at": datetime.utcnow(),
             "downloads": 0,
             "description": batch_data.get("description", ""),
-            "status": "active"
+            "status": "active",
+            "files": batch_data.get("files", []),  # Store file references
+            "last_download": None
         }
         await self.batches.insert_one(batch_doc)
         return batch_doc["batch_id"]
@@ -155,8 +158,10 @@ class Database:
             {
                 "$set": {
                     "username": username,
-                    "joined_date": datetime.utcnow(),
                     "last_active": datetime.utcnow()
+                },
+                "$setOnInsert": {
+                    "joined_date": datetime.utcnow()
                 }
             },
             upsert=True
@@ -170,3 +175,17 @@ class Database:
 
     async def get_all_users(self) -> List[Dict[str, Any]]:
         return await self.users.find({}).to_list(None)
+
+    async def get_user_batches(self, user_id: int) -> List[Dict[str, Any]]:
+        """Get all batches created by a user"""
+        return await self.batches.find({"created_by": user_id}).to_list(None)
+
+    async def update_batch_status(self, batch_id: str, status: str) -> None:
+        """Update batch status (active/completed/cancelled)"""
+        await self.batches.update_one(
+            {"batch_id": batch_id},
+            {"$set": {"status": status}}
+        )
+
+# Last updated: 2025-03-16 07:46:05
+# Updated by: utkarsh212646
