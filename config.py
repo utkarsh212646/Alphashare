@@ -29,9 +29,14 @@ DEVELOPER_LINK = os.getenv("DEVELOPER_LINK")
 SUPPORT_LINK = os.getenv("SUPPORT_LINK")
 
 # For Koyeb/render sleep mode 
-PING_MODE = bool(os.getenv("PING_MODE", True)) # make it True if deploying on koyeb/render else False
-PING_URL = os.getenv("URL") # add your koyeb/render's public url
-PING_TIME = int(os.getenv("PING_TIME")) # Add time_out in seconds
+PING_MODE = bool(os.getenv("PING_MODE", True))
+PING_URL = os.getenv("URL")
+PING_TIME = int(os.getenv("PING_TIME"))
+
+# Batch Upload Configuration
+MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "100"))  # Maximum files in a batch
+BATCH_AUTO_DELETE = bool(os.getenv("BATCH_AUTO_DELETE", "True"))  # Auto-delete batch messages
+BATCH_DELETE_TIMEOUT = int(os.getenv("BATCH_DELETE_TIMEOUT", "3600"))  # Default 1 hour
 
 # Admin IDs - Convert space-separated string to list of integers
 ADMIN_IDS: List[int] = [
@@ -101,6 +106,7 @@ Hello {user_mention}! I'm your secure file sharing assistant.
 • Multiple File Types Support
 • Real-time Tracking
 • Force Subscribe
+• Batch Upload Support
 
 📢 Join @Thealphabotz for updates!
 👨‍💻 Contact @adarsh2626 for support
@@ -119,11 +125,17 @@ Use /help to see available commands!
 
 👑 **Admin Commands:**
 • /upload - Upload file (reply to file)
+• /batch - Start batch upload mode
 • /stats - View statistics
 • /broadcast - Send broadcast
 • Auto-Delete Feature:
 Files are automatically deleted after the set time.
 Use /auto_del to change the deletion time.
+
+📝 **Batch Upload Commands:**
+• /batch - Start batch upload mode
+• /done - Complete batch upload
+• /cancel - Cancel batch upload
 
 📝 **Supported File Types:**
 • Documents (PDF, DOC, XLS, etc.)
@@ -158,6 +170,7 @@ An Open Source Repo :- github.com/utkarshdubey2008/alphashare
 • Multiple File Types
 • Enhanced Security
 • Automatic File Type Detection
+• Batch Upload Support
 
 Made with ❤️ by @adarsh2626
 """
@@ -174,6 +187,19 @@ Made with ❤️ by @adarsh2626
 
 🔗 **Share Link:**
 `{share_link}`
+"""
+
+    BATCH_START_TEXT = """
+📦 **Batch Upload Mode Activated!**
+
+Send your files one by one.
+I'll acknowledge each file as it's uploaded.
+
+Commands:
+• /done - Complete batch upload
+• /cancel - Cancel batch upload
+
+Current Status: Waiting for files...
 """
 
     FORCE_SUB_TEXT = """
@@ -243,3 +269,4 @@ class Progress:
 **💭 Total:** {4}
 **⏰ Time Left:** {5}
 """
+
