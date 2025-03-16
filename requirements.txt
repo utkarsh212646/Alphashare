@@ -10,4 +10,3 @@ pymongo==4.5.0
 flask
 aiohttp
 pillow
-PIL
