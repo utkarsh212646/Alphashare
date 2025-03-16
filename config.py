@@ -1,3 +1,4 @@
+
 from typing import List, Dict
 import os
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ DEFAULT_PARSE_MODE = "Markdown"  # or "HTML" if you prefer HTML formatting
 # Batch Upload Configuration
 MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "100"))  # Maximum files in a batch
 BATCH_AUTO_DELETE = bool(os.getenv("BATCH_AUTO_DELETE", "True"))  # Auto-delete batch messages
-BATCH_DELETE_TIMEOUT = int(os.getenv("BATCH_DELETE_TIMEOUT", "3600"))  # Default 1 hour
+DEFAULT_DELETE_TIME = int(os.getenv("DEFAULT_DELETE_TIME", "60"))  # Default 1 hour
 
 # Admin IDs - Convert space-separated string to list of integers
 ADMIN_IDS: List[int] = [
