@@ -116,17 +116,74 @@ async def handle_batch_file(client: Client, message: Message):
         # Forward file to database channel
         forwarded = await message.forward(DB_CHANNEL_ID)
         
-        # Get file info
+        # Initialize file data with default values
         file_data = {
-            "file_id": message.media.file_id,
-            "file_name": getattr(message.media, "file_name", f"File_{session.file_count}"),
-            "file_size": getattr(message.media, "file_size", 0),
-            "file_type": message.media.__class__.__name__.lower(),
             "uuid": str(uuid.uuid4()),
             "uploader_id": user_id,
             "message_id": forwarded.id,
             "batch_id": session.batch_id
         }
+        
+        # Update file data based on media type
+        if message.document:
+            file_data.update({
+                "file_id": message.document.file_id,
+                "file_name": message.document.file_name or "document",
+                "file_size": message.document.file_size,
+                "file_type": "document"
+            })
+        elif message.video:
+            file_data.update({
+                "file_id": message.video.file_id,
+                "file_name": message.video.file_name or "video.mp4",
+                "file_size": message.video.file_size,
+                "file_type": "video"
+            })
+        elif message.audio:
+            file_data.update({
+                "file_id": message.audio.file_id,
+                "file_name": message.audio.file_name or "audio",
+                "file_size": message.audio.file_size,
+                "file_type": "audio"
+            })
+        elif message.photo:
+            # Photos are a list, get the largest one (last item)
+            file_data.update({
+                "file_id": message.photo[-1].file_id,
+                "file_name": f"photo_{file_data['uuid']}.jpg",
+                "file_size": message.photo[-1].file_size,
+                "file_type": "photo"
+            })
+        elif message.voice:
+            file_data.update({
+                "file_id": message.voice.file_id,
+                "file_name": f"voice_{file_data['uuid']}.ogg",
+                "file_size": message.voice.file_size,
+                "file_type": "voice"
+            })
+        elif message.video_note:
+            file_data.update({
+                "file_id": message.video_note.file_id,
+                "file_name": f"video_note_{file_data['uuid']}.mp4",
+                "file_size": message.video_note.file_size,
+                "file_type": "video_note"
+            })
+        elif message.animation:
+            file_data.update({
+                "file_id": message.animation.file_id,
+                "file_name": message.animation.file_name or f"animation_{file_data['uuid']}.gif",
+                "file_size": message.animation.file_size,
+                "file_type": "animation"
+            })
+        elif message.sticker:
+            file_data.update({
+                "file_id": message.sticker.file_id,
+                "file_name": f"sticker_{file_data['uuid']}.webp",
+                "file_size": message.sticker.file_size,
+                "file_type": "sticker"
+            })
+        else:
+            raise ValueError("Unsupported media type")
         
         # Add file to session
         session.files.append(file_data)
