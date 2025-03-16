@@ -57,26 +57,34 @@ async def start_command(client: Client, message: Message):
             logger.info(f"Processing batch download with ID: {batch_id}")
             
             try:
-                batch_data = await db.get_batch(batch_id)
+                batch_data = await db.batches.find_one({"batch_id": batch_id})
                 
                 if not batch_data:
                     await message.reply_text("❌ Batch not found or has been deleted!")
                     return
                 
-                status_msg = await message.reply_text(f"🚀 Starting batch transfer...\n📦 Total files: {len(batch_data['files'])}")
+                if not batch_data.get('files'):
+                    logger.error(f"No files array in batch data for batch {batch_id}")
+                    await message.reply_text("❌ No files found in batch!")
+                    return
+                
+                logger.info(f"Found {len(batch_data['files'])} files in batch {batch_id}")
+                
+                status_msg = await message.reply_text(
+                    f"🚀 Starting batch transfer...\n"
+                    f"📦 Total files: {len(batch_data['files'])}"
+                )
                 
                 success_count = 0
                 failed_count = 0
                 sent_messages = []
                 
-                logger.info(f"Found {len(batch_data['files'])} files in batch {batch_id}")
-                
                 for file_data in batch_data['files']:
                     try:
-                        logger.info(f"Attempting to send file with message_id: {file_data.get('message_id')}")
+                        logger.info(f"Processing file with message_id: {file_data.get('message_id')}")
                         
                         if not file_data.get('message_id'):
-                            logger.error("Missing message_id in file_data")
+                            logger.error(f"Missing message_id in file data")
                             failed_count += 1
                             continue
                         
@@ -91,29 +99,25 @@ async def start_command(client: Client, message: Message):
                             sent_messages.append(copied_msg.id)
                             
                             if success_count % 2 == 0 or success_count == len(batch_data['files']):
-                                try:
-                                    await status_msg.edit_text(
-                                        f"📤 Sending files: {success_count}/{len(batch_data['files'])}\n"
-                                        f"✅ Successfully sent: {success_count}\n"
-                                        f"❌ Failed: {failed_count}"
-                                    )
-                                except Exception as e:
-                                    logger.error(f"Failed to update status: {e}")
+                                await status_msg.edit_text(
+                                    f"📤 Sending: {success_count}/{len(batch_data['files'])} files\n"
+                                    f"✅ Success: {success_count} | ❌ Failed: {failed_count}"
+                                )
                         
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.5)
                         
                     except Exception as e:
                         logger.error(f"Error sending file: {str(e)}")
                         failed_count += 1
                         continue
                 
-                try:
-                    await db.increment_batch_downloads(batch_id)
-                except Exception as e:
-                    logger.error(f"Failed to increment batch downloads: {e}")
+                await db.batches.update_one(
+                    {"batch_id": batch_id},
+                    {"$inc": {"downloads": 1}}
+                )
                 
                 final_text = (
-                    f"✅ Batch Files Sent Successfully\n\n"
+                    f"✅ Batch Files Completed\n\n"
                     f"• Total Files: {len(batch_data['files'])}\n"
                     f"• Successfully Sent: {success_count}\n"
                 )
@@ -121,18 +125,14 @@ async def start_command(client: Client, message: Message):
                 if failed_count > 0:
                     final_text += f"• Failed to Send: {failed_count}\n"
                 
-                if batch_data.get('description'):
-                    final_text += f"• Description: {batch_data['description']}\n"
-                
-                auto_delete_time = config.DEFAULT_DELETE_TIME
-                if sent_messages:
-                    final_text += f"\n⏳ Auto-Delete: Files will be deleted in {auto_delete_time} minutes"
+                if success_count > 0:
+                    final_text += f"\n⏳ Auto-Delete: Files will be deleted in {config.DEFAULT_DELETE_TIME} minutes"
                     asyncio.create_task(schedule_message_deletion(
                         client,
                         f"batch_{batch_id}",
                         message.chat.id,
                         sent_messages + [status_msg.id],
-                        auto_delete_time
+                        config.DEFAULT_DELETE_TIME
                     ))
                 
                 await status_msg.edit_text(final_text)
@@ -143,7 +143,7 @@ async def start_command(client: Client, message: Message):
                 logger.error(error_msg)
                 await message.reply_text(f"❌ {error_msg}")
             return
-        
+            
         try:
             file_data = await db.get_file(command_arg)
             if not file_data:
@@ -196,4 +196,4 @@ async def start_command(client: Client, message: Message):
         await message.reply_text(
             f"👋 Welcome to the bot, {message.from_user.mention}!\n\n"
             f"Use this bot to store and share your files."
-        )
+                        )
