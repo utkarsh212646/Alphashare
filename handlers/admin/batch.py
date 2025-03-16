@@ -25,13 +25,11 @@ async def start_batch(client: Client, message: Message):
         await message.reply_text("⚠️ Only admins can use this command!")
         return
     
+    # Clear any existing session for this user first
     if user_id in batch_sessions:
-        await message.reply_text(
-            "❗️ You already have an active batch session.\n"
-            "Please complete it with /done or cancel it with /cancel first."
-        )
-        return
+        del batch_sessions[user_id]
     
+    # Create a new session
     batch_sessions[user_id] = BatchSession(user_id)
     
     await message.reply_text(
@@ -101,12 +99,17 @@ async def handle_batch_commands(client: Client, message: Message):
             await message.reply_text(f"❌ Database Error: {str(e)}")
             return
 
-@Client.on_message(filters.private & filters.media)
+@Client.on_message(filters.private & ~filters.command(["batch", "done", "cancel"]))
 async def handle_batch_file(client: Client, message: Message):
     """Handle incoming files during batch upload"""
     user_id = message.from_user.id
     
+    # Skip processing if not in batch mode
     if user_id not in batch_sessions:
+        return
+    
+    # Skip non-media messages
+    if not message.media:
         return
     
     session = batch_sessions[user_id]
@@ -121,69 +124,80 @@ async def handle_batch_file(client: Client, message: Message):
             "uuid": str(uuid.uuid4()),
             "uploader_id": user_id,
             "message_id": forwarded.id,
-            "batch_id": session.batch_id
+            "batch_id": session.batch_id,
+            "file_name": f"File_{session.file_count}",
+            "file_size": 0,
+            "file_type": "unknown"
         }
         
-        # Update file data based on media type
+        # Get the correct file info based on what's available
         if message.document:
-            file_data.update({
-                "file_id": message.document.file_id,
-                "file_name": message.document.file_name or "document",
-                "file_size": message.document.file_size,
-                "file_type": "document"
-            })
+            if hasattr(message.document, "file_id"):
+                file_data["file_id"] = message.document.file_id
+            file_data["file_name"] = getattr(message.document, "file_name", f"document_{file_data['uuid']}")
+            file_data["file_size"] = getattr(message.document, "file_size", 0)
+            file_data["file_type"] = "document"
+            
         elif message.video:
-            file_data.update({
-                "file_id": message.video.file_id,
-                "file_name": message.video.file_name or "video.mp4",
-                "file_size": message.video.file_size,
-                "file_type": "video"
-            })
+            if hasattr(message.video, "file_id"):
+                file_data["file_id"] = message.video.file_id
+            file_data["file_name"] = getattr(message.video, "file_name", f"video_{file_data['uuid']}.mp4")
+            file_data["file_size"] = getattr(message.video, "file_size", 0)
+            file_data["file_type"] = "video"
+            
         elif message.audio:
-            file_data.update({
-                "file_id": message.audio.file_id,
-                "file_name": message.audio.file_name or "audio",
-                "file_size": message.audio.file_size,
-                "file_type": "audio"
-            })
+            if hasattr(message.audio, "file_id"):
+                file_data["file_id"] = message.audio.file_id
+            file_data["file_name"] = getattr(message.audio, "file_name", f"audio_{file_data['uuid']}")
+            file_data["file_size"] = getattr(message.audio, "file_size", 0)
+            file_data["file_type"] = "audio"
+            
         elif message.photo:
-            # Photos are a list, get the largest one (last item)
-            file_data.update({
-                "file_id": message.photo[-1].file_id,
-                "file_name": f"photo_{file_data['uuid']}.jpg",
-                "file_size": message.photo[-1].file_size,
-                "file_type": "photo"
-            })
+            # Try to get the file_id from the largest photo
+            file_data["file_type"] = "photo"
+            file_data["file_name"] = f"photo_{file_data['uuid']}.jpg"
+            
+            # Try different ways to access the photo file_id
+            if hasattr(message, "photo") and isinstance(message.photo, list) and len(message.photo) > 0:
+                file_data["file_id"] = message.photo[-1].file_id
+                file_data["file_size"] = message.photo[-1].file_size
+            elif hasattr(message, "photo") and hasattr(message.photo, "file_id"):
+                file_data["file_id"] = message.photo.file_id
+                file_data["file_size"] = getattr(message.photo, "file_size", 0)
+            
         elif message.voice:
-            file_data.update({
-                "file_id": message.voice.file_id,
-                "file_name": f"voice_{file_data['uuid']}.ogg",
-                "file_size": message.voice.file_size,
-                "file_type": "voice"
-            })
+            if hasattr(message.voice, "file_id"):
+                file_data["file_id"] = message.voice.file_id
+            file_data["file_name"] = f"voice_{file_data['uuid']}.ogg"
+            file_data["file_size"] = getattr(message.voice, "file_size", 0)
+            file_data["file_type"] = "voice"
+            
         elif message.video_note:
-            file_data.update({
-                "file_id": message.video_note.file_id,
-                "file_name": f"video_note_{file_data['uuid']}.mp4",
-                "file_size": message.video_note.file_size,
-                "file_type": "video_note"
-            })
+            if hasattr(message.video_note, "file_id"):
+                file_data["file_id"] = message.video_note.file_id
+            file_data["file_name"] = f"video_note_{file_data['uuid']}.mp4"
+            file_data["file_size"] = getattr(message.video_note, "file_size", 0)
+            file_data["file_type"] = "video_note"
+            
         elif message.animation:
-            file_data.update({
-                "file_id": message.animation.file_id,
-                "file_name": message.animation.file_name or f"animation_{file_data['uuid']}.gif",
-                "file_size": message.animation.file_size,
-                "file_type": "animation"
-            })
+            if hasattr(message.animation, "file_id"):
+                file_data["file_id"] = message.animation.file_id
+            file_data["file_name"] = getattr(message.animation, "file_name", f"animation_{file_data['uuid']}.gif")
+            file_data["file_size"] = getattr(message.animation, "file_size", 0)
+            file_data["file_type"] = "animation"
+            
         elif message.sticker:
-            file_data.update({
-                "file_id": message.sticker.file_id,
-                "file_name": f"sticker_{file_data['uuid']}.webp",
-                "file_size": message.sticker.file_size,
-                "file_type": "sticker"
-            })
+            if hasattr(message.sticker, "file_id"):
+                file_data["file_id"] = message.sticker.file_id
+            file_data["file_name"] = f"sticker_{file_data['uuid']}.webp"
+            file_data["file_size"] = getattr(message.sticker, "file_size", 0)
+            file_data["file_type"] = "sticker"
+            
         else:
-            raise ValueError("Unsupported media type")
+            # If we get here, we've received media but couldn't identify the type
+            # We'll use the forwarded message's ID as a reference
+            file_data["file_type"] = "unknown_media"
+            file_data["file_id"] = str(forwarded.id)  # Use message ID as fallback
         
         # Add file to session
         session.files.append(file_data)
@@ -197,4 +211,7 @@ async def handle_batch_file(client: Client, message: Message):
         )
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error processing file: {error_details}")
         await message.reply_text(f"❌ Error: {str(e)}")
