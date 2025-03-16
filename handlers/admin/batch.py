@@ -17,8 +17,9 @@ class BatchSession:
         self.status_message = None
         self.start_time = datetime.utcnow()
         self.description = ""
+        self.file_count = 0
 
-@Client.on_message(filters.command("batch") & filters.user(ADMIN_IDS))
+@Client.on_message(filters.command("batch"))
 async def start_batch(client: Client, message: Message):
     """Start a new batch upload session"""
     user_id = message.from_user.id
@@ -26,7 +27,7 @@ async def start_batch(client: Client, message: Message):
     if user_id in batch_sessions:
         await message.reply_text(
             "❗️ You already have an active batch session.\n"
-            "Please complete it with /done or cancel it with /cancel_batch first."
+            "Please complete it with /done or cancel it with /cancel first."
         )
         return
     
@@ -36,121 +37,74 @@ async def start_batch(client: Client, message: Message):
     
     # Send instructions
     await message.reply_text(
-        "📦 <b>Batch Upload Mode Started!</b>\n\n"
-        "• Send me files one by one\n"
-        "• Use /adddesc to add a description to this batch\n"
-        "• Use /done when you finish uploading\n"
-        "• Use /cancel_batch to cancel this session\n\n"
-        "<b>Current Status:</b>\n"
-        "Files received: 0",
+        "🎯 **Batch Mode Activated! Send your files now.**\n\n"
+        "📤 Send me the files you want to include in this batch.\n"
+        "📝 I'll acknowledge each file as it's uploaded.\n\n"
+        "Commands:\n"
+        "• /done - Complete batch and get link\n"
+        "• /cancel - Cancel batch upload\n\n"
+        "Current Status: Waiting for files...",
         parse_mode="html"
     )
 
-@Client.on_message(filters.command("adddesc") & filters.user(ADMIN_IDS))
-async def add_batch_description(client: Client, message: Message):
-    """Add description to current batch"""
+@Client.on_message(filters.command(["done", "cancel"]))
+async def handle_batch_commands(client: Client, message: Message):
+    """Handle /done and /cancel commands"""
     user_id = message.from_user.id
     
     if user_id not in batch_sessions:
-        await message.reply_text("❌ No active batch session found!")
-        return
-    
-    # Get description from command
-    if len(message.command) < 2:
-        await message.reply_text("❌ Please provide a description!\n/adddesc your description here")
-        return
-    
-    description = " ".join(message.command[1:])
-    batch_sessions[user_id].description = description
-    
-    await message.reply_text(
-        "✅ <b>Batch description added successfully!</b>\n\n"
-        f"Description: {description}",
-        parse_mode="html"
-    )
-
-@Client.on_message(filters.command("done") & filters.user(ADMIN_IDS))
-async def finish_batch(client: Client, message: Message):
-    """Complete the batch upload session"""
-    user_id = message.from_user.id
-    
-    if user_id not in batch_sessions:
-        await message.reply_text("❌ No active batch session found!")
+        await message.reply_text("❌ No active batch session found!\nUse /batch to start one.")
         return
     
     session = batch_sessions[user_id]
+    command = message.command[0]
     
-    if len(session.files) == 0:
-        await message.reply_text("❌ No files were uploaded in this batch!")
+    if command == "cancel":
         del batch_sessions[user_id]
+        await message.reply_text("🚫 Batch upload cancelled successfully!")
         return
     
-    # Get bot username for link generation
-    bot_username = (await client.get_me()).username
-    batch_link = f"https://t.me/{bot_username}?start=batch_{session.batch_id}"
-    
-    # Store batch in database
-    db = Database()
-    try:
-        await db.add_batch({
-            "batch_id": session.batch_id,
-            "created_by": user_id,
-            "total_files": len(session.files),
-            "description": session.description
-        })
-    except Exception as e:
-        await message.reply_text(f"❌ Error saving batch: {str(e)}")
-        return
-    
-    # Clean up status message
-    if session.status_message:
+    if command == "done":
+        if len(session.files) == 0:
+            await message.reply_text("❌ No files were uploaded in this batch!")
+            del batch_sessions[user_id]
+            return
+        
+        # Get bot username for link generation
+        bot_username = (await client.get_me()).username
+        batch_link = f"https://t.me/{bot_username}?start=batch_{session.batch_id}"
+        
+        # Store batch in database
+        db = Database()
         try:
-            await session.status_message.delete()
-        except:
-            pass
-    
-    # Send completion message
-    duration = datetime.utcnow() - session.start_time
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Batch Link", url=batch_link)]
-    ])
-    
-    await message.reply_text(
-        f"✅ <b>Batch Upload Completed!</b>\n\n"
-        f"• Total Files: <code>{len(session.files)}</code>\n"
-        f"• Batch ID: <code>{session.batch_id}</code>\n"
-        f"• Time Taken: <code>{duration.seconds}s</code>\n"
-        f"• Description: {session.description or 'Not provided'}\n\n"
-        f"Share this link to access all files:",
-        reply_markup=keyboard,
-        parse_mode="html"
-    )
-    
-    # Clear session
-    del batch_sessions[user_id]
+            await db.add_batch({
+                "batch_id": session.batch_id,
+                "created_by": user_id,
+                "total_files": len(session.files),
+                "files": session.files,
+                "creation_time": session.start_time.isoformat()
+            })
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔗 Download All Files", url=batch_link)]
+            ])
+            
+            await message.reply_text(
+                f"✅ **Batch Upload Completed!**\n\n"
+                f"📊 Total Files: {len(session.files)}\n"
+                f"⏱ Time Taken: {(datetime.utcnow() - session.start_time).seconds}s\n\n"
+                f"Click the button below to access all files:",
+                reply_markup=keyboard,
+                parse_mode="html"
+            )
+            
+            del batch_sessions[user_id]
+            
+        except Exception as e:
+            await message.reply_text(f"❌ Error saving batch: {str(e)}")
+            return
 
-@Client.on_message(filters.command("cancel_batch") & filters.user(ADMIN_IDS))
-async def cancel_batch(client: Client, message: Message):
-    """Cancel the current batch upload session"""
-    user_id = message.from_user.id
-    
-    if user_id not in batch_sessions:
-        await message.reply_text("❌ No active batch session found!")
-        return
-    
-    # Clean up status message if exists
-    session = batch_sessions[user_id]
-    if session.status_message:
-        try:
-            await session.status_message.delete()
-        except:
-            pass
-    
-    del batch_sessions[user_id]
-    await message.reply_text("🚫 Batch upload session cancelled!")
-
-@Client.on_message(filters.user(ADMIN_IDS) & filters.media)
+@Client.on_message(filters.media & ~filters.command)
 async def handle_batch_file(client: Client, message: Message):
     """Handle incoming files during batch upload"""
     user_id = message.from_user.id
@@ -159,12 +113,13 @@ async def handle_batch_file(client: Client, message: Message):
         return
     
     session = batch_sessions[user_id]
+    session.file_count += 1
     
     # Get file info
     try:
         file_data = {
             "file_id": message.media.file_id if hasattr(message.media, "file_id") else None,
-            "file_name": getattr(message.media, "file_name", f"File_{len(session.files) + 1}"),
+            "file_name": getattr(message.media, "file_name", f"File_{session.file_count}"),
             "file_size": getattr(message.media, "file_size", 0),
             "file_type": message.media.__class__.__name__.lower(),
             "uuid": str(uuid.uuid4()),
@@ -173,35 +128,16 @@ async def handle_batch_file(client: Client, message: Message):
             "batch_id": session.batch_id
         }
         
-        # Store file in database
-        db = Database()
-        await db.add_file(file_data)
-        
-        # Add file to session
+        # Store file info in session
         session.files.append(file_data)
         
-        # Update status message
-        status_text = (
-            f"📦 <b>Batch Upload in Progress</b>\n\n"
-            f"• Files Received: <code>{len(session.files)}</code>\n"
-            f"• Last File: <code>{file_data['file_name']}</code>\n"
-            f"• Description: {session.description or 'Not set'}\n\n"
-            f"Send more files or use:\n"
-            f"• /done - Complete batch\n"
-            f"• /adddesc - Add description\n"
-            f"• /cancel_batch - Cancel session"
+        # Send acknowledgment
+        ordinal_suffix = lambda n: str(n) + ("th" if 4 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
+        await message.reply_text(
+            f"✅ {ordinal_suffix(session.file_count)} file uploaded.\n"
+            f"📁 Name: {file_data['file_name']}\n"
+            f"💾 Size: {file_data['file_size']} bytes"
         )
-        
-        try:
-            if session.status_message:
-                await session.status_message.edit_text(status_text, parse_mode="html")
-            else:
-                session.status_message = await message.reply_text(status_text, parse_mode="html")
-        except Exception as e:
-            print(f"Error updating status: {str(e)}")
             
     except Exception as e:
         await message.reply_text(f"❌ Error processing file: {str(e)}")
-
-# Last updated: 2025-03-16 06:38:41
-# Updated by: utkarsh212646
