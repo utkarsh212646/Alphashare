@@ -80,7 +80,7 @@ async def start_command(client: Client, message: Message):
                     f"• Total Files: `{batch_data['total_files']}`\n"
                     f"• Description: {batch_data.get('description', 'Not provided')}\n\n"
                     f"⬇️ Downloading files...",
-                    parse_mode="markdown"
+                    parse_mode="Markdown"
                 )
                 
                 # Send all files in batch
